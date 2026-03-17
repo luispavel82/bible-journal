@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const RSS_PROXY = 'https://api.rss2json.com/v1/api.json?rss_url='
-const PODCAST_RSS = 'https://feeds.buzzsprout.com/2226984.rss'
+const PODCAST_RSS = 'https://anchor.fm/s/ef92cad0/podcast/rss'
 
 function formatTime(sec) {
   if (!sec || isNaN(sec)) return '0:00'
