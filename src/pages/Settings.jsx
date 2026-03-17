@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../context/ProfileContext'
@@ -8,13 +8,19 @@ import Layout from '../components/Layout'
 
 export default function Settings() {
   const { user } = useAuth()
-  const { profile, updateProfile } = useProfile()
+  const { profile, updateProfile, loadingProfile } = useProfile()
   const navigate = useNavigate()
 
-  const [displayName, setDisplayName] = useState(profile?.display_name || '')
-  const [planStartDate, setPlanStartDate] = useState(
-    profile?.plan_start_date ? toInputDate(profile.plan_start_date) : toInputDate(new Date())
-  )
+  const [displayName, setDisplayName] = useState('')
+  const [planStartDate, setPlanStartDate] = useState('')
+
+  // Sincronizar formulario cuando el perfil carga
+  useEffect(() => {
+    if (profile) {
+      setDisplayName(profile.display_name || '')
+      setPlanStartDate(profile.plan_start_date ? toInputDate(profile.plan_start_date) : toInputDate(new Date()))
+    }
+  }, [profile])
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMsg, setProfileMsg] = useState('')
 
@@ -62,6 +68,14 @@ export default function Settings() {
       setConfirmPassword('')
       setTimeout(() => setPasswordMsg(''), 3000)
     }
+  }
+
+  if (loadingProfile) {
+    return (
+      <Layout>
+        <div className="text-center py-20 text-amber-600">Cargando perfil...</div>
+      </Layout>
+    )
   }
 
   return (

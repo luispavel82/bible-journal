@@ -80,19 +80,23 @@ export default function DayEntry() {
   }, [day, user])
 
   const loadRecordings = async () => {
-    const { data: files } = await supabase.storage
-      .from('voice-notes')
-      .list(`${user.id}/${day}`)
-    if (!files || files.length === 0) { setRecordings([]); return }
-    const signed = await Promise.all(
-      files.map(async (f) => {
-        const { data } = await supabase.storage
-          .from('voice-notes')
-          .createSignedUrl(`${user.id}/${day}/${f.name}`, 3600)
-        return { name: f.name, url: data?.signedUrl || '' }
-      })
-    )
-    setRecordings(signed.filter(r => r.url))
+    try {
+      const { data: files, error } = await supabase.storage
+        .from('voice-notes')
+        .list(`${user.id}/${day}`)
+      if (error || !files || files.length === 0) { setRecordings([]); return }
+      const signed = await Promise.all(
+        files.map(async (f) => {
+          const { data } = await supabase.storage
+            .from('voice-notes')
+            .createSignedUrl(`${user.id}/${day}/${f.name}`, 3600)
+          return { name: f.name, url: data?.signedUrl || '' }
+        })
+      )
+      setRecordings(signed.filter(r => r.url))
+    } catch {
+      setRecordings([])
+    }
   }
 
   const handleSave = async (completed = isCompleted) => {
