@@ -39,27 +39,46 @@ export default function Friends() {
       .maybeSingle()
     setInviteCode(codeRow?.code || '')
 
-    // Amigos aceptados con sus perfiles y entradas
+    // Amigos aceptados
     const { data: accepted } = await supabase
       .from('friendships')
-      .select('id, user_id, friend_id, profiles!friendships_friend_id_fkey(display_name, plan_start_date)')
+      .select('id, user_id, friend_id')
       .eq('user_id', user.id)
       .eq('status', 'accepted')
 
-    // También los donde soy el friend
     const { data: acceptedReverse } = await supabase
       .from('friendships')
-      .select('id, user_id, friend_id, profiles!friendships_user_id_fkey(display_name, plan_start_date)')
+      .select('id, user_id, friend_id')
       .eq('friend_id', user.id)
       .eq('status', 'accepted')
 
     // Solicitudes pendientes recibidas
     const { data: pending } = await supabase
       .from('friendships')
-      .select('id, user_id, profiles!friendships_user_id_fkey(display_name)')
+      .select('id, user_id')
       .eq('friend_id', user.id)
       .eq('status', 'pending')
-    setPendingReceived(pending || [])
+
+    // Obtener todos los IDs relevantes para buscar perfiles
+    const allIds = [
+      ...(accepted || []).map(f => f.friend_id),
+      ...(acceptedReverse || []).map(f => f.user_id),
+      ...(pending || []).map(f => f.user_id),
+    ]
+    let profilesMap = {}
+    if (allIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, plan_start_date')
+        .in('user_id', allIds)
+      profilesData?.forEach(p => { profilesMap[p.user_id] = p })
+    }
+
+    // Agregar perfil a pendientes
+    setPendingReceived((pending || []).map(p => ({
+      ...p,
+      profiles: profilesMap[p.user_id] || null,
+    })))
 
     // Cargar entradas de amigos
     const friendIds = [
@@ -90,7 +109,7 @@ export default function Friends() {
     encToday?.forEach(e => { encMap[e.to_user_id] = true })
     setEncouraged(encMap)
 
-    const buildFriend = (friendId, profileData) => {
+    const buildFriend = (friendId, profileData = profilesMap[friendId]) => {
       const userEntries = entriesByUser[friendId] || []
       const completed = userEntries.filter(e => e.is_completed).length
       const startDate = profileData?.plan_start_date || `${new Date().getFullYear()}-01-01`
@@ -113,8 +132,8 @@ export default function Friends() {
     }
 
     const allFriends = [
-      ...(accepted || []).map(f => buildFriend(f.friend_id, f.profiles)),
-      ...(acceptedReverse || []).map(f => buildFriend(f.user_id, f.profiles)),
+      ...(accepted || []).map(f => buildFriend(f.friend_id)),
+      ...(acceptedReverse || []).map(f => buildFriend(f.user_id)),
     ]
     setFriends(allFriends)
     setLoading(false)

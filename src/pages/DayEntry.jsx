@@ -42,7 +42,7 @@ export default function DayEntry() {
   const [shareMsg, setShareMsg] = useState('')
 
   // Grabaciones de voz
-  const [recordings, setRecordings] = useState([])
+  const [recordings, setRecordings] = useState([]) // [{ name, url }]
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [uploadingAudio, setUploadingAudio] = useState(false)
@@ -72,15 +72,28 @@ export default function DayEntry() {
         setShareToken(data.share_token || null)
       }
 
-      // Cargar grabaciones de voz
-      const { data: files } = await supabase.storage
-        .from('voice-notes')
-        .list(`${user.id}/${day}`)
-      setRecordings(files || [])
+      // Cargar grabaciones de voz con URLs firmadas
+      await loadRecordings()
       setLoading(false)
     }
     fetchEntry()
   }, [day, user])
+
+  const loadRecordings = async () => {
+    const { data: files } = await supabase.storage
+      .from('voice-notes')
+      .list(`${user.id}/${day}`)
+    if (!files || files.length === 0) { setRecordings([]); return }
+    const signed = await Promise.all(
+      files.map(async (f) => {
+        const { data } = await supabase.storage
+          .from('voice-notes')
+          .createSignedUrl(`${user.id}/${day}/${f.name}`, 3600)
+        return { name: f.name, url: data?.signedUrl || '' }
+      })
+    )
+    setRecordings(signed.filter(r => r.url))
+  }
 
   const handleSave = async (completed = isCompleted) => {
     setSaving(true)
@@ -157,17 +170,8 @@ export default function DayEntry() {
     const fileName = `${Date.now()}.webm`
     const path = `${user.id}/${day}/${fileName}`
     await supabase.storage.from('voice-notes').upload(path, blob, { contentType: 'audio/webm' })
-    // Refrescar lista
-    const { data: files } = await supabase.storage.from('voice-notes').list(`${user.id}/${day}`)
-    setRecordings(files || [])
+    await loadRecordings()
     setUploadingAudio(false)
-  }
-
-  const getAudioUrl = (fileName) => {
-    const { data } = supabase.storage
-      .from('voice-notes')
-      .getPublicUrl(`${user.id}/${day}/${fileName}`)
-    return data.publicUrl
   }
 
   const deleteRecording = async (fileName) => {
@@ -257,7 +261,7 @@ export default function DayEntry() {
                 {recordings.map((rec, i) => (
                   <div key={rec.name} className="flex items-center gap-2 bg-amber-50 rounded-xl p-3">
                     <span className="text-xs text-gray-500 w-6">#{i + 1}</span>
-                    <audio controls src={getAudioUrl(rec.name)} className="flex-1 h-8" style={{ minWidth: 0 }} />
+                    <audio controls src={rec.url} className="flex-1 h-8" style={{ minWidth: 0 }} />
                     <button
                       onClick={() => deleteRecording(rec.name)}
                       className="text-red-400 hover:text-red-600 text-lg flex-shrink-0"

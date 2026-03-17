@@ -30,15 +30,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const today = new Date().toISOString().split('T')[0]
       const [{ data: entriesData }, { data: encData }] = await Promise.all([
         supabase.from('journal_entries').select('day_number, is_completed').eq('user_id', user.id),
-        supabase.from('encouragements')
-          .select('from_user_id, profiles!encouragements_from_user_id_fkey(display_name)')
-          .eq('to_user_id', user.id)
-          .gte('created_at', new Date().toISOString().split('T')[0])
+        supabase.from('encouragements').select('from_user_id').eq('to_user_id', user.id).gte('created_at', today),
       ])
       setEntries(entriesData || [])
-      setNotifications(encData || [])
+
+      // Obtener nombres de perfiles por separado
+      const senderIds = (encData || []).map(e => e.from_user_id)
+      if (senderIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select('user_id, display_name').in('user_id', senderIds)
+        setNotifications(profilesData || [])
+      } else {
+        setNotifications([])
+      }
       setLoading(false)
     }
     fetchData()
@@ -64,7 +70,7 @@ export default function Dashboard() {
         {/* Ánimos recibidos */}
         {notifications.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm text-yellow-800">
-            💪 {notifications.map(n => n.profiles?.display_name || 'Alguien').join(', ')} te enviaron ánimos hoy
+            💪 {notifications.map(n => n.display_name || 'Alguien').join(', ')} te enviaron ánimos hoy
           </div>
         )}
 
