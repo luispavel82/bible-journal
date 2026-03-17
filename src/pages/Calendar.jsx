@@ -1,21 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useProfile } from '../context/ProfileContext'
 import { supabase } from '../lib/supabase'
 import { readingPlan } from '../lib/readingPlan'
+import { getCurrentDayNumber, dayNumberToDate } from '../lib/dayUtils'
 import Layout from '../components/Layout'
 
 export default function Calendar() {
   const { user } = useAuth()
+  const { planStartDate } = useProfile()
   const [entries, setEntries] = useState({})
   const [loading, setLoading] = useState(true)
 
-  const today = new Date()
-  const startOfYear = new Date(today.getFullYear(), 0, 1)
-  const currentDay = Math.min(
-    Math.ceil((today - startOfYear) / (1000 * 60 * 60 * 24)) + 1,
-    365
-  )
+  const currentDay = getCurrentDayNumber(planStartDate)
 
   useEffect(() => {
     const fetchEntries = async () => {
@@ -31,22 +29,30 @@ export default function Calendar() {
     fetchEntries()
   }, [user])
 
-  const months = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-  ]
-
-  const year = today.getFullYear()
+  // Generar meses basados en la fecha de inicio del plan
+  const startDate = new Date(planStartDate)
+  const monthData = []
   let dayCounter = 1
+  let cursor = new Date(startDate)
+  cursor.setDate(1)
 
-  const monthData = months.map((name, monthIndex) => {
+  while (dayCounter <= 365) {
+    const year = cursor.getFullYear()
+    const monthIndex = cursor.getMonth()
+    const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+    // Día de inicio dentro del mes
+    const startDay = monthData.length === 0 ? startDate.getDate() : 1
     const days = []
-    for (let d = 1; d <= daysInMonth && dayCounter <= 365; d++) {
+    for (let d = startDay; d <= daysInMonth && dayCounter <= 365; d++) {
       days.push(dayCounter++)
     }
-    return { name, days }
-  })
+    if (days.length > 0) {
+      monthData.push({ name: `${monthNames[monthIndex]} ${year}`, days })
+    }
+    cursor.setMonth(cursor.getMonth() + 1)
+    if (monthData.length > 14) break // seguridad
+  }
 
   const completedCount = Object.values(entries).filter(Boolean).length
 

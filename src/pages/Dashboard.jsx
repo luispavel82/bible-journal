@@ -1,38 +1,53 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useProfile } from '../context/ProfileContext'
 import { supabase } from '../lib/supabase'
 import { readingPlan } from '../lib/readingPlan'
+import { getCurrentDayNumber } from '../lib/dayUtils'
 import Layout from '../components/Layout'
+import PodcastPlayer from '../components/PodcastPlayer'
+
+function calculateStreak(entries, currentDay) {
+  const completed = new Set(entries.filter(e => e.is_completed).map(e => e.day_number))
+  let streak = 0
+  for (let d = currentDay; d >= 1; d--) {
+    if (completed.has(d)) streak++
+    else break
+  }
+  return streak
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { profile, planStartDate } = useProfile()
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
+  const [notifications, setNotifications] = useState([])
 
-  const today = new Date()
-  const startOfYear = new Date(today.getFullYear(), 0, 1)
-  const currentDay = Math.min(
-    Math.ceil((today - startOfYear) / (1000 * 60 * 60 * 24)) + 1,
-    365
-  )
+  const currentDay = getCurrentDayNumber(planStartDate)
   const todayPlan = readingPlan[currentDay - 1]
 
   useEffect(() => {
-    const fetchEntries = async () => {
-      const { data } = await supabase
-        .from('journal_entries')
-        .select('day_number, is_completed')
-        .eq('user_id', user.id)
-      setEntries(data || [])
+    const fetchData = async () => {
+      const [{ data: entriesData }, { data: encData }] = await Promise.all([
+        supabase.from('journal_entries').select('day_number, is_completed').eq('user_id', user.id),
+        supabase.from('encouragements')
+          .select('from_user_id, profiles!encouragements_from_user_id_fkey(display_name)')
+          .eq('to_user_id', user.id)
+          .gte('created_at', new Date().toISOString().split('T')[0])
+      ])
+      setEntries(entriesData || [])
+      setNotifications(encData || [])
       setLoading(false)
     }
-    fetchEntries()
+    fetchData()
   }, [user])
 
   const completedDays = entries.filter(e => e.is_completed).length
   const progress = Math.round((completedDays / 365) * 100)
   const todayEntry = entries.find(e => e.day_number === currentDay)
+  const streak = calculateStreak(entries, currentDay)
 
   const recentDays = Array.from({ length: 7 }, (_, i) => {
     const day = currentDay - 6 + i
@@ -41,12 +56,21 @@ export default function Dashboard() {
     return { day, completed: entry?.is_completed || false }
   }).filter(Boolean)
 
+  const displayName = profile?.display_name || ''
+
   return (
     <Layout>
       <div className="space-y-5">
+        {/* Ánimos recibidos */}
+        {notifications.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm text-yellow-800">
+            💪 {notifications.map(n => n.profiles?.display_name || 'Alguien').join(', ')} te enviaron ánimos hoy
+          </div>
+        )}
+
         {/* Banner de progreso */}
         <div className="rounded-2xl bg-gradient-to-r from-amber-800 to-amber-600 text-white p-6 shadow-md">
-          <p className="text-amber-200 text-sm mb-1">Bienvenido a tu</p>
+          <p className="text-amber-200 text-sm mb-0.5">Bienvenido{displayName ? `, ${displayName}` : ''}</p>
           <h1 className="text-2xl font-bold mb-4">Diario Bíblico</h1>
           <div className="flex items-center justify-between mb-2">
             <span className="text-amber-100 text-sm">Progreso anual</span>
@@ -70,9 +94,7 @@ export default function Dashboard() {
                 Día {currentDay} — {todayPlan?.title}
               </h2>
             </div>
-            {todayEntry?.is_completed && (
-              <span className="text-2xl">✅</span>
-            )}
+            {todayEntry?.is_completed && <span className="text-2xl">✅</span>}
           </div>
           {todayPlan && (
             <div className="grid grid-cols-2 gap-2 mb-4">
@@ -97,6 +119,14 @@ export default function Dashboard() {
           <Link to="/today" className="btn-primary block text-center w-full py-3">
             {todayEntry ? '✏️ Ver / Editar entrada de hoy' : '✍️ Escribir entrada de hoy'}
           </Link>
+        </div>
+
+        {/* Podcast Evangelio y Vida */}
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2 px-1">
+            🎙️ Último episodio
+          </p>
+          <PodcastPlayer />
         </div>
 
         {/* Últimos 7 días */}
@@ -131,10 +161,15 @@ export default function Dashboard() {
         </div>
 
         {/* Estadísticas */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           <div className="card text-center py-4 px-2">
             <p className="text-2xl font-bold text-amber-700">{completedDays}</p>
             <p className="text-xs text-gray-500 mt-1">Completados</p>
+          </div>
+          <div className="card text-center py-4 px-2">
+            <p className="text-xl">{streak > 0 ? '🔥' : '○'}</p>
+            <p className="text-lg font-bold text-amber-700 leading-tight">{streak}</p>
+            <p className="text-xs text-gray-500">Racha</p>
           </div>
           <div className="card text-center py-4 px-2">
             <p className="text-2xl font-bold text-amber-700">{currentDay}</p>
@@ -145,6 +180,11 @@ export default function Dashboard() {
             <p className="text-xs text-gray-500 mt-1">Restantes</p>
           </div>
         </div>
+
+        {/* Exportar diario */}
+        <Link to="/export" className="btn-secondary w-full py-3 text-center block text-sm">
+          📄 Exportar mi diario en PDF
+        </Link>
       </div>
     </Layout>
   )

@@ -36,10 +36,20 @@ export default function Layout({ children }) {
             </div>
           </Link>
           {user && (
-            <nav className="flex items-center gap-5">
+            <nav className="flex items-center gap-4">
               {navLink('/dashboard', 'Inicio')}
               {navLink('/today', 'Hoy')}
-              {navLink('/calendar', 'Calendario')}
+              {navLink('/calendar', 'Cal.')}
+              {navLink('/friends', 'Amigos')}
+              <Link
+                to="/settings"
+                className={`text-lg transition-colors ${
+                  location.pathname === '/settings' ? 'opacity-100' : 'opacity-50 hover:opacity-80'
+                }`}
+                title="Configuración"
+              >
+                ⚙️
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="text-sm text-gray-400 hover:text-red-500 transition-colors"
