@@ -29,7 +29,7 @@ export default function PodcastPlayer() {
           setEpisode({
             title: item.title,
             pubDate: new Date(item.pubDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }),
-            description: item.description?.replace(/<[^>]+>/g, '').substring(0, 140) + '...',
+            description: item.description ? item.description.replace(/<[^>]+>/g, '').substring(0, 140) + '...' : null,
             audioUrl: item.enclosure?.link || item.link,
           })
         } else {
